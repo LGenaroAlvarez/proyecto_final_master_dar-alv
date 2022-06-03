@@ -2659,50 +2659,162 @@ uint8_t pot1_in = 0;
 uint8_t pot2_in = 0;
 uint8_t pot3_in = 0;
 uint8_t pot4_in = 0;
-uint8_t estado = 0;
+uint8_t estado = 2;
 unsigned short CCPR = 0;
 unsigned short CCPRx = 0;
 
 
 
 void setup(void);
-void data_transfer(uint8_t data);
 uint8_t EEPROM_read(uint8_t adress);
 void EEPROM_write(uint8_t adress, uint8_t data);
 
 unsigned short map(uint8_t val, uint8_t in_min, uint8_t in_max,
             unsigned short out_min, unsigned short out_max);
+void load_data_rb1(void);
+void load_data_rb2(void);
 
 
 void __attribute__((picinterrupt(("")))) isr(void){
-
-    if (PIR1bits.ADIF){
-        if (ADCON0bits.CHS == 0){
-            pot1_in = ADRESH;
-            CCPR = map(pot1_in, 0, 255, 13, 80);
-            CCPR1L = (uint8_t)(CCPR>>2);
-            CCP1CONbits.DC1B = CCPR & 0b11;
+    if(INTCONbits.RBIF){
+        A = 1;
+        C = 1;
+        E = 1;
+        if (!PORTBbits.RB0){
+            A = 0;
+            B = A;
+        }
+        if (B != A){
+            B = A;
+            estado++;
+            PORTE = estado;
+        }
+        if (estado > 2){
+            estado = 0;
+            PORTE = estado;
         }
 
-        else if (ADCON0bits.CHS == 1){
-            pot2_in = ADRESH;
-            CCPRx = map(pot2_in, 0, 255, 13, 80);
-            CCPR2L = (uint8_t)(CCPRx>>2);
-            CCP2CONbits.DC2B0 = CCPRx & 0b01;
-            CCP2CONbits.DC2B1 = CCPRx & 0b10;
+        if (estado == 0){
+            if(!PORTBbits.RB1){
+                C = 0;
+                D = C;
+            }
+            if (D != C){
+                D = C;
+                load_data_rb1();
+            }
+            else if(!PORTBbits.RB2){
+                E = 0;
+                F = E;
+            }
+            if (F != E){
+                F = E;
+                load_data_rb2();
+            }
         }
-
-        else if (ADCON0bits.CHS == 2){
-            pot3_in = ADRESH;
+        else if (estado == 1){
+            if(!PORTBbits.RB1){
+                C = 0;
+                D = C;
+            }
+            if (D != C){
+                D = C;
+                pot1_in = EEPROM_read(0x00);
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                CCPR = map(pot1_in, 0, 255, 13, 80);
+                CCPR1L = (uint8_t)(CCPR>>2);
+                CCP1CONbits.DC1B = CCPR & 0b11;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                pot2_in = EEPROM_read(0x01);
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                CCPRx = map(pot2_in, 0, 255, 13, 80);
+                CCPR2L = (uint8_t)(CCPRx>>2);
+                CCP2CONbits.DC2B0 = CCPRx & 0b01;
+                CCP2CONbits.DC2B1 = CCPRx & 0b10;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                pot3_in = EEPROM_read(0x02);
+                PORTDbits.RD1 = 0;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                PORTDbits.RD0 = 1;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                SSPBUF = pot3_in;
+                while(!SSPSTATbits.BF);
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                pot4_in = EEPROM_read(0x03);
+                PORTDbits.RD1 = 1;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                PORTDbits.RD0 = 0;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                SSPBUF = pot4_in;
+                while(!SSPSTATbits.BF);
+            }
+            else if(!PORTBbits.RB2){
+                E = 0;
+                F = E;
+            }
+            if (F != E){
+                F = E;
+                pot1_in = EEPROM_read(0x04);
+                _delay((unsigned long)((250)*(500000/4000.0)));
+                CCPR = map(pot1_in, 0, 255, 13, 80);
+                CCPR1L = (uint8_t)(CCPR>>2);
+                CCP1CONbits.DC1B = CCPR & 0b11;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                pot2_in = EEPROM_read(0x05);
+                _delay((unsigned long)((250)*(500000/4000.0)));
+                CCPRx = map(pot2_in, 0, 255, 13, 80);
+                CCPR2L = (uint8_t)(CCPRx>>2);
+                CCP2CONbits.DC2B0 = CCPRx & 0b01;
+                CCP2CONbits.DC2B1 = CCPRx & 0b10;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                pot3_in = EEPROM_read(0x06);
+                _delay((unsigned long)((250)*(500000/4000.0)));
+                PORTDbits.RD1 = 0;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                PORTDbits.RD0 = 1;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                SSPBUF = pot3_in;
+                while(!SSPSTATbits.BF);
+                _delay((unsigned long)((250)*(500000/4000.0)));
+                pot4_in = EEPROM_read(0x07);
+                _delay((unsigned long)((250)*(500000/4000.0)));
+                PORTDbits.RD1 = 1;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                PORTDbits.RD0 = 0;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                SSPBUF = pot4_in;
+                while(!SSPSTATbits.BF);
+            }
         }
-
-        else if (ADCON0bits.CHS == 3){
-            pot4_in = ADRESH;
-        }
-        PIR1bits.ADIF = 0;
+        INTCONbits.RBIF = 0;
     }
+    if (estado == 0){
+        if (PIR1bits.ADIF){
+            if (ADCON0bits.CHS == 0){
+                pot1_in = ADRESH;
+                CCPR = map(pot1_in, 0, 255, 13, 80);
+                CCPR1L = (uint8_t)(CCPR>>2);
+                CCP1CONbits.DC1B = CCPR & 0b11;
+            }
 
+            else if (ADCON0bits.CHS == 1){
+                pot2_in = ADRESH;
+                CCPRx = map(pot2_in, 0, 255, 13, 80);
+                CCPR2L = (uint8_t)(CCPRx>>2);
+                CCP2CONbits.DC2B0 = CCPRx & 0b01;
+                CCP2CONbits.DC2B1 = CCPRx & 0b10;
+            }
 
+            else if (ADCON0bits.CHS == 2){
+                pot3_in = ADRESH;
+            }
+
+            else if (ADCON0bits.CHS == 3){
+                pot4_in = ADRESH;
+            }
+            PIR1bits.ADIF = 0;
+        }
+    }
 }
 
 void main(void) {
@@ -2742,14 +2854,12 @@ void main(void) {
             SSPBUF = pot3_in;
             while(!SSPSTATbits.BF);
 
-
             PORTDbits.RD1 = 1;
             _delay((unsigned long)((50)*(500000/4000.0)));
             PORTDbits.RD0 = 0;
             _delay((unsigned long)((50)*(500000/4000.0)));
             SSPBUF = pot4_in;
             while(!SSPSTATbits.BF);
-
         }
         _delay((unsigned long)((50)*(500000/4000.0)));
     }
@@ -2765,9 +2875,11 @@ void setup(void){
     TRISA = 0b00001111;
     TRISB = 0;
     TRISD = 0;
+    TRISE = 0;
     PORTA = 0;
     PORTB = 0;
     PORTD = 0;
+    PORTE = 0;
 
     TRISC = 0b00010000;
     PORTC = 0;
@@ -2786,6 +2898,20 @@ void setup(void){
     INTCONbits.PEIE = 1;
     PIR1bits.ADIF = 0;
     PIE1bits.ADIE = 1;
+    INTCONbits.RBIE = 1;
+    IOCBbits.IOCB0 = 1;
+    IOCBbits.IOCB1 = 1;
+    IOCBbits.IOCB2 = 1;
+    INTCONbits.RBIF = 0;
+
+
+    TRISBbits.TRISB0 = 1;
+    TRISBbits.TRISB1 = 1;
+    TRISBbits.TRISB2 = 1;
+    OPTION_REGbits.nRBPU = 0;
+    WPUBbits.WPUB0 = 1;
+    WPUBbits.WPUB1 = 1;
+    WPUBbits.WPUB2 = 1;
 
 
     OSCCONbits.IRCF = 0b0011;
@@ -2837,16 +2963,6 @@ unsigned short map(uint8_t x, uint8_t x0, uint8_t x1,
     return (unsigned short)(y0+((float)(y1-y0)/(x1-x0))*(x-x0));
 }
 
-void data_transfer(uint8_t data){
-
-    _delay((unsigned long)((50)*(500000/4000.0)));
-    SSPBUF = data;
-    while(!SSPSTATbits.BF);
-    _delay((unsigned long)((50)*(500000/4000.0)));
-
-    return;
-}
-
 
 uint8_t EEPROM_read(uint8_t adress){
     EEADR = adress;
@@ -2871,4 +2987,26 @@ void EEPROM_write(uint8_t adress, uint8_t data){
     EECON1bits.WREN = 0;
     INTCONbits.RBIF = 0;
     INTCONbits.GIE = 1;
+}
+
+void load_data_rb1(void){
+    EEPROM_write(0x00, pot1_in);
+    _delay((unsigned long)((250)*(500000/4000.0)));
+    EEPROM_write(0x01, pot2_in);
+    _delay((unsigned long)((250)*(500000/4000.0)));
+    EEPROM_write(0x02, pot3_in);
+    _delay((unsigned long)((250)*(500000/4000.0)));
+    EEPROM_write(0x03, pot4_in);
+    _delay((unsigned long)((250)*(500000/4000.0)));
+}
+
+void load_data_rb2(void){
+    EEPROM_write(0x04, pot1_in);
+    _delay((unsigned long)((250)*(500000/4000.0)));
+    EEPROM_write(0x05, pot2_in);
+    _delay((unsigned long)((250)*(500000/4000.0)));
+    EEPROM_write(0x06, pot3_in);
+    _delay((unsigned long)((250)*(500000/4000.0)));
+    EEPROM_write(0x07, pot4_in);
+    _delay((unsigned long)((250)*(500000/4000.0)));
 }

@@ -51,50 +51,162 @@ uint8_t pot1_in = 0;            // VARIABLES PARA VALORES DE POTENCIOMETROS
 uint8_t pot2_in = 0;
 uint8_t pot3_in = 0;
 uint8_t pot4_in = 0;
-uint8_t estado = 0;
+uint8_t estado = 2;
 unsigned short CCPR = 0;// Variable para almacenar ancho de pulso al hacer la interpolación lineal
 unsigned short CCPRx = 0;
 
 
 //PROTO FUNCIONES
 void setup(void);                   // FUNCION DE SETUP
-void data_transfer(uint8_t data);                                               // FUNCION PARA LA TRANSFERENCIA DE DATOS (SPI)
 uint8_t EEPROM_read(uint8_t adress);                                            // FUNCION PARA LECTURA DE LA EEPROM
 void EEPROM_write(uint8_t adress, uint8_t data);                                // FUNCION PARA ESCRITURA A LA EEPROM
 
 unsigned short map(uint8_t val, uint8_t in_min, uint8_t in_max, 
             unsigned short out_min, unsigned short out_max);
+void load_data_rb1(void);
+void load_data_rb2(void);
 
 //INTERRUPCIONES
 void __interrupt() isr(void){
-    
-    if (PIR1bits.ADIF){
-        if (ADCON0bits.CHS == 0){
-            pot1_in = ADRESH;
-            CCPR = map(pot1_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);              // EJECUCION DE INTERPOLACION PARA ANCHO DE PULSO
-            CCPR1L = (uint8_t)(CCPR>>2);                                        // ASIGNAR AL CPR1L LOS 8 BITS MAS SIGNIFICATIVOS
-            CCP1CONbits.DC1B = CCPR & 0b11;  
+    if(INTCONbits.RBIF){
+        A = 1;
+        C = 1;
+        E = 1;
+        if (!PORTBbits.RB0){                                                    // REVISAR SI RB0 FUE PRESIONADO
+            A = 0;
+            B = A;        
         }
-
-        else if (ADCON0bits.CHS == 1){
-            pot2_in = ADRESH;
-            CCPRx = map(pot2_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);             // Valor de ancho de pulso
-            CCPR2L = (uint8_t)(CCPRx>>2);                                       // Guardamos los 8 bits mas significativos en CPR1L
-            CCP2CONbits.DC2B0 = CCPRx & 0b01;
-            CCP2CONbits.DC2B1 = CCPRx & 0b10; 
+        if (B != A){                                                            // REVISAR SI RB0 FUE LIBERADO
+            B = A;
+            estado++;
+            PORTE = estado;
         }
-
-        else if (ADCON0bits.CHS == 2){
-            pot3_in = ADRESH;
+        if (estado > 2){
+            estado = 0;
+            PORTE = estado;
         }
-
-        else if (ADCON0bits.CHS == 3){
-            pot4_in = ADRESH;
+        
+        if (estado == 0){
+            if(!PORTBbits.RB1){                                                 // REVISAR SI RB1 FUE PRESIONADO
+                C = 0;
+                D = C;         
+            }
+            if (D != C){                                                        // REVISAR SI RB1 FUE LIBERADO
+                D = C;
+                load_data_rb1();
+            }
+            else if(!PORTBbits.RB2){                                            // REVISAR SI RB1 FUE PRESIONADO
+                E = 0;
+                F = E;         
+            }
+            if (F != E){                                                        // REVISAR SI RB1 FUE LIBERADO
+                F = E;
+                load_data_rb2();
+            }
         }
-        PIR1bits.ADIF = 0;  
+        else if (estado == 1){
+            if(!PORTBbits.RB1){                                                 // REVISAR SI RB1 FUE PRESIONADO
+                C = 0;
+                D = C;         
+            }
+            if (D != C){                                                        // REVISAR SI RB1 FUE LIBERADO
+                D = C;
+                pot1_in = EEPROM_read(0x00);
+                __delay_ms(50);
+                CCPR = map(pot1_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);              // EJECUCION DE INTERPOLACION PARA ANCHO DE PULSO
+                CCPR1L = (uint8_t)(CCPR>>2);                                        // ASIGNAR AL CPR1L LOS 8 BITS MAS SIGNIFICATIVOS
+                CCP1CONbits.DC1B = CCPR & 0b11;  
+                __delay_ms(50);
+                pot2_in = EEPROM_read(0x01);
+                __delay_ms(50);
+                CCPRx = map(pot2_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);             // Valor de ancho de pulso
+                CCPR2L = (uint8_t)(CCPRx>>2);                                       // Guardamos los 8 bits mas significativos en CPR1L
+                CCP2CONbits.DC2B0 = CCPRx & 0b01;
+                CCP2CONbits.DC2B1 = CCPRx & 0b10; 
+                __delay_ms(50);
+                pot3_in = EEPROM_read(0x02);
+                PORTDbits.RD1 = 0;
+                __delay_ms(50);
+                PORTDbits.RD0 = 1;
+                __delay_ms(50);
+                SSPBUF = pot3_in;
+                while(!SSPSTATbits.BF);
+                __delay_ms(50);
+                pot4_in = EEPROM_read(0x03);
+                PORTDbits.RD1 = 1;
+                __delay_ms(50);
+                PORTDbits.RD0 = 0;
+                __delay_ms(50);
+                SSPBUF = pot4_in;
+                while(!SSPSTATbits.BF);
+            }
+            else if(!PORTBbits.RB2){                                            // REVISAR SI RB1 FUE PRESIONADO
+                E = 0;
+                F = E;         
+            }
+            if (F != E){                                                        // REVISAR SI RB1 FUE LIBERADO
+                F = E;
+                pot1_in = EEPROM_read(0x04);
+                __delay_ms(250);
+                CCPR = map(pot1_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);              // EJECUCION DE INTERPOLACION PARA ANCHO DE PULSO
+                CCPR1L = (uint8_t)(CCPR>>2);                                        // ASIGNAR AL CPR1L LOS 8 BITS MAS SIGNIFICATIVOS
+                CCP1CONbits.DC1B = CCPR & 0b11;  
+                __delay_ms(50);
+                pot2_in = EEPROM_read(0x05);
+                __delay_ms(250);
+                CCPRx = map(pot2_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);             // Valor de ancho de pulso
+                CCPR2L = (uint8_t)(CCPRx>>2);                                       // Guardamos los 8 bits mas significativos en CPR1L
+                CCP2CONbits.DC2B0 = CCPRx & 0b01;
+                CCP2CONbits.DC2B1 = CCPRx & 0b10; 
+                __delay_ms(50);
+                pot3_in = EEPROM_read(0x06);
+                __delay_ms(250);
+                PORTDbits.RD1 = 0;
+                __delay_ms(50);
+                PORTDbits.RD0 = 1;
+                __delay_ms(50);
+                SSPBUF = pot3_in;
+                while(!SSPSTATbits.BF);
+                __delay_ms(250);
+                pot4_in = EEPROM_read(0x07);
+                __delay_ms(250);
+                PORTDbits.RD1 = 1;
+                __delay_ms(50);
+                PORTDbits.RD0 = 0;
+                __delay_ms(50);
+                SSPBUF = pot4_in;
+                while(!SSPSTATbits.BF);
+            }
+        }
+        INTCONbits.RBIF = 0;                                                    // LIMPIAR BANDERA DE INTERRUPCION EN PORTB
     }
-    
-    
+    if (estado == 0){
+        if (PIR1bits.ADIF){
+            if (ADCON0bits.CHS == 0){
+                pot1_in = ADRESH;
+                CCPR = map(pot1_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);              // EJECUCION DE INTERPOLACION PARA ANCHO DE PULSO
+                CCPR1L = (uint8_t)(CCPR>>2);                                        // ASIGNAR AL CPR1L LOS 8 BITS MAS SIGNIFICATIVOS
+                CCP1CONbits.DC1B = CCPR & 0b11;  
+            }
+
+            else if (ADCON0bits.CHS == 1){
+                pot2_in = ADRESH;
+                CCPRx = map(pot2_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);             // Valor de ancho de pulso
+                CCPR2L = (uint8_t)(CCPRx>>2);                                       // Guardamos los 8 bits mas significativos en CPR1L
+                CCP2CONbits.DC2B0 = CCPRx & 0b01;
+                CCP2CONbits.DC2B1 = CCPRx & 0b10; 
+            }
+
+            else if (ADCON0bits.CHS == 2){
+                pot3_in = ADRESH;
+            }
+
+            else if (ADCON0bits.CHS == 3){
+                pot4_in = ADRESH;
+            }
+            PIR1bits.ADIF = 0;  
+        }
+    }    
 }
 
 void main(void) {
@@ -133,7 +245,6 @@ void main(void) {
             __delay_ms(50);
             SSPBUF = pot3_in;
             while(!SSPSTATbits.BF);
-            //PORTB = pot1_in;
             
             PORTDbits.RD1 = 1;
             __delay_ms(50);
@@ -141,7 +252,6 @@ void main(void) {
             __delay_ms(50);
             SSPBUF = pot4_in;
             while(!SSPSTATbits.BF);
-            //PORTB = pot2_in;
         }
         __delay_ms(50);
     }
@@ -157,9 +267,11 @@ void setup(void){
     TRISA = 0b00001111;             // PORTA AN0 AN1 y AN2 COMO ENTRADA, RESTO COMO SALIDA
     TRISB = 0;
     TRISD = 0;
+    TRISE = 0;
     PORTA = 0;                      // LIMPIEZA DEL PORTA
     PORTB = 0;
     PORTD = 0;                      // LIMPIEZA DEL PORTD
+    PORTE = 0;
 
     TRISC = 0b00010000;             // ENTRADA DE DATOS COMO ENTRADA, SINCRONIZADOR DE RELOJ Y SALIDA DE DATOS COMO SALIDA
     PORTC = 0;                      // LIMPIEZA DE PORTB
@@ -178,6 +290,20 @@ void setup(void){
     INTCONbits.PEIE = 1;            // HABILITAR INTERRUPCIONES EN PERIFERICOS
     PIR1bits.ADIF = 0;              // LIMPIEZA DE BANDERA DE INTERRUPCION DE ADC
     PIE1bits.ADIE = 1;              // HABILITAR INTERRUPCION DE ADC
+    INTCONbits.RBIE = 1;            // HABILITAR INTERRUPCIONES EN PORTB
+    IOCBbits.IOCB0 = 1;             // HABILITAR INTERRUPCION EN CAMBIO PARA RB0
+    IOCBbits.IOCB1 = 1;             // HABILITAR INTERRUPCION EN CAMBIO PARA RB1
+    IOCBbits.IOCB2 = 1;             // HABILITAR INTERRUPCION EN CAMBIO PARA RB2
+    INTCONbits.RBIF = 0;            // LIMPIAR BANDERA DE INTERRUPCION EN PORTB
+    
+    //CONFIG PUSHBUTTONS EN PORTB
+    TRISBbits.TRISB0 = 1;           // RB0 COMO INPUT
+    TRISBbits.TRISB1 = 1;           // RB1 COMO INPUT
+    TRISBbits.TRISB2 = 1;           // RB2 COMO INPUT
+    OPTION_REGbits.nRBPU = 0;       // HABILITAR WEAK PULLUP EN PUERTO B
+    WPUBbits.WPUB0 = 1;             // HABILITAR RESISTENCIA EN RB0
+    WPUBbits.WPUB1 = 1;             // HABILITAR RESISTENCIA EN RB1
+    WPUBbits.WPUB2 = 1;             // HABILITAR RESISTENCIA EN RB2
     
     //OSCCONFIC
     OSCCONbits.IRCF = 0b0011;       // FRECUENCIA DE OSCILADOR INTERNO (500kHz)
@@ -229,16 +355,6 @@ unsigned short map(uint8_t x, uint8_t x0, uint8_t x1,
     return (unsigned short)(y0+((float)(y1-y0)/(x1-x0))*(x-x0));
 }
 
-void data_transfer(uint8_t data){
-
-    __delay_ms(50);
-    SSPBUF = data;
-    while(!SSPSTATbits.BF);
-    __delay_ms(50);
-
-    return;
-}
-
 // LECTURA DE LA EEPROM
 uint8_t EEPROM_read(uint8_t adress){
     EEADR = adress;
@@ -263,4 +379,26 @@ void EEPROM_write(uint8_t adress, uint8_t data){
     EECON1bits.WREN = 0;            // DESHABILITAR ESCRITURA EN EEPROM
     INTCONbits.RBIF = 0;            // LIMPIEZA DE BANDERA DE INTERRUPCIONES EN PUERTO B
     INTCONbits.GIE = 1;             // HABILITAR INTERRUPCIONES GLOBALES
+}
+
+void load_data_rb1(void){
+    EEPROM_write(0x00, pot1_in);
+    __delay_ms(250);
+    EEPROM_write(0x01, pot2_in);
+    __delay_ms(250);
+    EEPROM_write(0x02, pot3_in);
+    __delay_ms(250);
+    EEPROM_write(0x03, pot4_in);
+    __delay_ms(250);
+}
+
+void load_data_rb2(void){
+    EEPROM_write(0x04, pot1_in);
+    __delay_ms(250);
+    EEPROM_write(0x05, pot2_in);
+    __delay_ms(250);
+    EEPROM_write(0x06, pot3_in);
+    __delay_ms(250);
+    EEPROM_write(0x07, pot4_in);
+    __delay_ms(250);
 }
