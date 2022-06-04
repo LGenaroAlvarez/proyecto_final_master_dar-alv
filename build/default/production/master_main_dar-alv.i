@@ -2648,7 +2648,7 @@ extern __bank0 __bit __timeout;
 
 # 1 "C:\\Program Files\\Microchip\\xc8\\v2.35\\pic\\include\\c90\\stdint.h" 1 3
 # 31 "master_main_dar-alv.c" 2
-# 44 "master_main_dar-alv.c"
+# 46 "master_main_dar-alv.c"
 uint8_t A = 1;
 uint8_t B = 1;
 uint8_t C = 1;
@@ -2659,6 +2659,12 @@ uint8_t pot1_in = 0;
 uint8_t pot2_in = 0;
 uint8_t pot3_in = 0;
 uint8_t pot4_in = 0;
+uint8_t serial_val = 0;
+uint8_t pot1_serial = 0;
+uint8_t pot2_serial = 0;
+uint8_t pot3_serial = 0;
+uint8_t pot4_serial = 0;
+uint8_t servo_sel = 0;
 uint8_t estado = 2;
 unsigned short CCPR = 0;
 unsigned short CCPRx = 0;
@@ -2815,6 +2821,38 @@ void __attribute__((picinterrupt(("")))) isr(void){
             PIR1bits.ADIF = 0;
         }
     }
+
+    if (estado == 2){
+        if (PIR1bits.RCIF){
+            serial_val = RCREG;
+            if (serial_val == 0){
+                servo_sel = 0;
+            }
+            else if (serial_val == 1){
+                servo_sel = 1;
+            }
+            else if (serial_val == 2){
+                servo_sel = 2;
+            }
+            else if (serial_val == 3){
+                servo_sel = 3;
+            }
+            else if (serial_val > 3){
+                if (servo_sel == 0){
+                    pot1_serial = serial_val;
+                }
+                else if (servo_sel == 1){
+                    pot2_serial = serial_val;
+                }
+                else if (servo_sel == 2){
+                    pot3_serial = serial_val;
+                }
+                else if (servo_sel == 3){
+                    pot4_serial = serial_val;
+                }
+            }
+        }
+    }
 }
 
 void main(void) {
@@ -2844,16 +2882,47 @@ void main(void) {
             ADCON0bits.GO = 1;
         }
 
+        if (estado == 0){
+            PORTAbits.RA6 = 0;
+            if (PORTAbits.RA6 == 0){
+                PORTDbits.RD1 = 0;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                PORTDbits.RD0 = 1;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                SSPBUF = pot3_in;
+                while(!SSPSTATbits.BF);
 
-        PORTAbits.RA6 = 0;
-        if (PORTAbits.RA6 == 0){
+                PORTDbits.RD1 = 1;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                PORTDbits.RD0 = 0;
+                _delay((unsigned long)((50)*(500000/4000.0)));
+                SSPBUF = pot4_in;
+                while(!SSPSTATbits.BF);
+            }
+            _delay((unsigned long)((50)*(500000/4000.0)));
+        }
+
+        else if (estado == 2){
+            pot1_in = map(pot1_serial, 5, 127, 0, 255);
+            CCPR = map(pot1_in, 0, 255, 13, 80);
+            CCPR1L = (uint8_t)(CCPR>>2);
+            CCP1CONbits.DC1B = CCPR & 0b11;
+            _delay((unsigned long)((50)*(500000/4000.0)));
+            pot2_in = map(pot2_serial, 5, 127, 0, 255);
+            CCPRx = map(pot2_in, 0, 255, 13, 80);
+            CCPR2L = (uint8_t)(CCPRx>>2);
+            CCP2CONbits.DC2B0 = CCPRx & 0b01;
+            CCP2CONbits.DC2B1 = CCPRx & 0b10;
+            _delay((unsigned long)((50)*(500000/4000.0)));
+            pot3_in = map(pot3_serial, 5, 127, 0, 255);
             PORTDbits.RD1 = 0;
             _delay((unsigned long)((50)*(500000/4000.0)));
             PORTDbits.RD0 = 1;
             _delay((unsigned long)((50)*(500000/4000.0)));
             SSPBUF = pot3_in;
             while(!SSPSTATbits.BF);
-
+            _delay((unsigned long)((50)*(500000/4000.0)));
+            pot4_in = map(pot4_serial, 5, 127, 0, 255);
             PORTDbits.RD1 = 1;
             _delay((unsigned long)((50)*(500000/4000.0)));
             PORTDbits.RD0 = 0;
@@ -2861,7 +2930,7 @@ void main(void) {
             SSPBUF = pot4_in;
             while(!SSPSTATbits.BF);
         }
-        _delay((unsigned long)((50)*(500000/4000.0)));
+
     }
 
     return;
@@ -2873,7 +2942,6 @@ void setup(void){
     ANSELH = 0;
 
     TRISA = 0b00001111;
-    TRISB = 0;
     TRISD = 0;
     TRISE = 0;
     PORTA = 0;
@@ -2954,6 +3022,18 @@ void setup(void){
 
     TRISCbits.TRISC1 = 0;
     TRISCbits.TRISC2 = 0;
+
+
+    TXSTAbits.SYNC = 0;
+    TXSTAbits.BRGH = 1;
+    BAUDCTLbits.BRG16 = 1;
+    SPBRGH = 0;
+    SPBRG = 25;
+    RCSTAbits.SPEN = 1;
+    TXSTAbits.TXEN = 1;
+    TXSTAbits.TX9 = 1;
+    RCSTAbits.CREN = 1;
+    PIE1bits.RCIE = 1;
 
     return;
 }

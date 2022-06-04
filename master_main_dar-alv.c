@@ -35,22 +35,30 @@
 #define _XTAL_FREQ 500000          // FRECUENCIA PARA DELAYS (1MHz)
 
 //DEFINICIONES GLOBALES
-#define IN_MIN 0                // Valor minimo de entrada del potenciometro
-#define IN_MAX 255              // Valor máximo de entrada del potenciometro
-#define OUT_MIN 13              // Valor minimo de ancho de pulso de señal PWM
-#define OUT_MAX 80  
+#define IN_MIN 0                                                                // Valor minimo de entrada del potenciometro
+#define IN_MAX 255                                                              // Valor máximo de entrada del potenciometro
+#define OUT_MIN 13                                                              // Valor minimo de ancho de pulso de señal PWM
+#define OUT_MAX 80                                                              // VALOR MAXIMO DE ANCHO DE PULSO DE SENAL PWM
+#define IN_MIN_S 5
+#define IN_MAX_S 127
 
 //VARIABLES GLOBALES
-uint8_t A = 1;                  // VARIABLES PARA ANTIRREBOTE 
+uint8_t A = 1;                                                                  // VARIABLES PARA ANTIRREBOTE 
 uint8_t B = 1;
 uint8_t C = 1;
 uint8_t D = 1;
 uint8_t E = 1;
 uint8_t F = 1;
-uint8_t pot1_in = 0;            // VARIABLES PARA VALORES DE POTENCIOMETROS
+uint8_t pot1_in = 0;                                                            // VARIABLES PARA VALORES DE POTENCIOMETROS
 uint8_t pot2_in = 0;
 uint8_t pot3_in = 0;
 uint8_t pot4_in = 0;
+uint8_t serial_val = 0;
+uint8_t pot1_serial = 0;
+uint8_t pot2_serial = 0;
+uint8_t pot3_serial = 0;
+uint8_t pot4_serial = 0;
+uint8_t servo_sel = 0;
 uint8_t estado = 2;
 unsigned short CCPR = 0;// Variable para almacenar ancho de pulso al hacer la interpolación lineal
 unsigned short CCPRx = 0;
@@ -206,7 +214,39 @@ void __interrupt() isr(void){
             }
             PIR1bits.ADIF = 0;  
         }
-    }    
+    }
+    
+    if (estado == 2){
+        if (PIR1bits.RCIF){
+            serial_val = RCREG;
+            if (serial_val == 0){
+                servo_sel = 0;
+            }
+            else if (serial_val == 1){
+                servo_sel = 1;
+            }
+            else if (serial_val == 2){
+                servo_sel = 2;
+            }
+            else if (serial_val == 3){
+                servo_sel = 3;
+            }
+            else if (serial_val > 3){
+                if (servo_sel == 0){
+                    pot1_serial = serial_val;
+                }
+                else if (servo_sel == 1){
+                    pot2_serial = serial_val;
+                }
+                else if (servo_sel == 2){
+                    pot3_serial = serial_val;
+                }
+                else if (servo_sel == 3){
+                    pot4_serial = serial_val;
+                }
+            }
+        }
+    }
 }
 
 void main(void) {
@@ -236,16 +276,47 @@ void main(void) {
             ADCON0bits.GO = 1;                  // INICIADO DE CONVERSION
         }
         
+        if (estado == 0){
+            PORTAbits.RA6 = 0;
+            if (PORTAbits.RA6 == 0){
+                PORTDbits.RD1 = 0;
+                __delay_ms(50);
+                PORTDbits.RD0 = 1;
+                __delay_ms(50);
+                SSPBUF = pot3_in;
+                while(!SSPSTATbits.BF);
 
-        PORTAbits.RA6 = 0;
-        if (PORTAbits.RA6 == 0){
+                PORTDbits.RD1 = 1;
+                __delay_ms(50);
+                PORTDbits.RD0 = 0;
+                __delay_ms(50);
+                SSPBUF = pot4_in;
+                while(!SSPSTATbits.BF);
+            }
+            __delay_ms(50);
+        }
+        
+        else if (estado == 2){
+            pot1_in = map(pot1_serial, IN_MIN_S, IN_MAX_S, IN_MIN, IN_MAX);              // MAPEO PARA OBTENER RANGO NORMAL
+            CCPR = map(pot1_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);              // EJECUCION DE INTERPOLACION PARA ANCHO DE PULSO
+            CCPR1L = (uint8_t)(CCPR>>2);                                        // ASIGNAR AL CPR1L LOS 8 BITS MAS SIGNIFICATIVOS
+            CCP1CONbits.DC1B = CCPR & 0b11;  
+            __delay_ms(50);
+            pot2_in = map(pot2_serial, IN_MIN_S, IN_MAX_S, IN_MIN, IN_MAX);
+            CCPRx = map(pot2_in, IN_MIN, IN_MAX, OUT_MIN, OUT_MAX);             // Valor de ancho de pulso
+            CCPR2L = (uint8_t)(CCPRx>>2);                                       // Guardamos los 8 bits mas significativos en CPR1L
+            CCP2CONbits.DC2B0 = CCPRx & 0b01;
+            CCP2CONbits.DC2B1 = CCPRx & 0b10; 
+            __delay_ms(50);
+            pot3_in = map(pot3_serial, IN_MIN_S, IN_MAX_S, IN_MIN, IN_MAX);
             PORTDbits.RD1 = 0;
             __delay_ms(50);
             PORTDbits.RD0 = 1;
             __delay_ms(50);
             SSPBUF = pot3_in;
             while(!SSPSTATbits.BF);
-            
+            __delay_ms(50);
+            pot4_in = map(pot4_serial, IN_MIN_S, IN_MAX_S, IN_MIN, IN_MAX);
             PORTDbits.RD1 = 1;
             __delay_ms(50);
             PORTDbits.RD0 = 0;
@@ -253,7 +324,7 @@ void main(void) {
             SSPBUF = pot4_in;
             while(!SSPSTATbits.BF);
         }
-        __delay_ms(50);
+        
     }
     
     return;
@@ -265,7 +336,6 @@ void setup(void){
     ANSELH = 0;                     // DEMAS PUERTOS COMO DIGITALES
 
     TRISA = 0b00001111;             // PORTA AN0 AN1 y AN2 COMO ENTRADA, RESTO COMO SALIDA
-    TRISB = 0;
     TRISD = 0;
     TRISE = 0;
     PORTA = 0;                      // LIMPIEZA DEL PORTA
@@ -346,6 +416,18 @@ void setup(void){
 
     TRISCbits.TRISC1 = 0;           // HABILITAR SALIDA DE PWM EN RC1
     TRISCbits.TRISC2 = 0;           // HABILITAR SALIDA DE PWM EN RC2
+    
+    //SERIAL CONFIG 
+    TXSTAbits.SYNC = 0;             // MODO ASINCRONO
+    TXSTAbits.BRGH = 1;             // 
+    BAUDCTLbits.BRG16 = 1;          // 
+    SPBRGH = 0;                     // BYTE SUPERIOR
+    SPBRG = 25;                     // BAUD RATE APROXIMADO (9600)
+    RCSTAbits.SPEN = 1;             // ACTIVAR EUSART CON TX/CK COMO SALIDA
+    TXSTAbits.TXEN = 1;             // ACTIVADO DE TRANSMISOR DEL EUSART
+    TXSTAbits.TX9 = 1;              // COMUNICACION UTILIZANDO 8bits
+    RCSTAbits.CREN = 1;             // ACTIVADO DEL RECEPTOR DEL EUSART
+    PIE1bits.RCIE = 1;              // ACTIVAR INTERRUPCIONES EN RECEPTOR
     
     return;
 }
